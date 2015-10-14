@@ -11,17 +11,21 @@ import com.alibaba.sdk.android.oss.callback.SaveCallback;
 import com.alibaba.sdk.android.oss.model.AccessControlList;
 import com.alibaba.sdk.android.oss.model.AuthenticationType;
 import com.alibaba.sdk.android.oss.model.ClientConfiguration;
+import com.alibaba.sdk.android.oss.model.OSSException;
 import com.alibaba.sdk.android.oss.model.OSSFederationToken;
 import com.alibaba.sdk.android.oss.model.StsTokenGetter;
 import com.alibaba.sdk.android.oss.storage.OSSBucket;
 import com.alibaba.sdk.android.oss.storage.OSSFile;
 import com.alibaba.sdk.android.oss.util.OSSLog;
+import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 
 import cn.timeface.tfupload.BuildConfig;
 import cn.timeface.tfupload.UploadFileObj;
-import cn.timeface.tfupload.UploadTaskInfo;
 import cn.timeface.tfupload.oss.token.FederationToken;
 import cn.timeface.tfupload.oss.token.FederationTokenGetter;
 
@@ -39,15 +43,13 @@ public class OSSManager {
     protected String bucketName;
     protected OSSService ossService;
     protected OSSBucket bucket;
-    protected UploadTaskInfo uploadTaskInfo;
 
 
-    public OSSManager(Context context, String serverAddress, String endPoint, String bucketName, UploadTaskInfo uploadTaskInfo) {
+    public OSSManager(Context context, String serverAddress, String endPoint, String bucketName) {
         this.context = context;
         this.serverAddress = serverAddress;
         this.endPoint = endPoint;
         this.bucketName = bucketName;
-        this.uploadTaskInfo = uploadTaskInfo;
 
         initOssService(context);
         bucket = ossService.getOssBucket(this.bucketName);
@@ -97,12 +99,33 @@ public class OSSManager {
         ossFile.deleteInBackground(deleteCallback);
     }
 
-    public void upload( SaveCallback saveCallback) throws FileNotFoundException {
-        for (UploadFileObj uploadFileObj : uploadTaskInfo.getFileObjs()) {
-            String key = uploadFileObj.getObjectKey();
-            OSSFile ossFile = ossService.getOssFile(bucket, key);
-            ossFile.setUploadFilePath(uploadFileObj.getFinalUploadFile().getAbsolutePath(), "application/octet-stream");
-            ossFile.ResumableUploadInBackground(saveCallback);
-        }
+    public void upload(UploadFileObj uploadFileObj, SaveCallback saveCallback) throws FileNotFoundException {
+        String key = uploadFileObj.getObjectKey();
+        OSSFile ossFile = ossService.getOssFile(bucket, key);
+        ossFile.setUploadFilePath(uploadFileObj.getFinalUploadFile().getAbsolutePath(), "application/octet-stream");
+        ossFile.ResumableUploadInBackground(saveCallback);
     }
+
+    public void upload(UploadFileObj uploadFileObj) throws FileNotFoundException, OSSException {
+        String key = uploadFileObj.getObjectKey();
+        OSSFile ossFile = ossService.getOssFile(bucket, key);
+        ossFile.setUploadFilePath(uploadFileObj.getFinalUploadFile().getAbsolutePath(), "application/octet-stream");
+        ossFile.upload();
+    }
+
+    public boolean checkFileExist(UploadFileObj file) {
+        OkHttpClient httpClient = new OkHttpClient();
+        String url = String.format("http://%s.%s/%s", this.bucketName, this.endPoint, file.getObjectKey());
+        Request request = new Request.Builder().head()
+                .url(url)
+                .build();
+        Response response = null;
+        try {
+            response = httpClient.newCall(request).execute();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return response != null && (response.code() == 200);
+    }
+
 }

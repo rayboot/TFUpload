@@ -15,9 +15,8 @@ public class UploadFile extends UploadFileObj {
 
     @Override
     public String getObjectKey() {
-        return "test/" + this.filePath.hashCode() + ".jpg";
+        return folder + "/" + this.filePath.hashCode() + ".jpg";
     }
-
 
     @Override
     public int describeContents() {

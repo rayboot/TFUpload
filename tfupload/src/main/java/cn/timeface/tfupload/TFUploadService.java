@@ -8,7 +8,6 @@ import android.os.PowerManager;
 import android.support.v7.app.NotificationCompat;
 import android.util.Log;
 
-import com.alibaba.sdk.android.oss.callback.SaveCallback;
 import com.alibaba.sdk.android.oss.model.OSSException;
 
 import java.io.FileNotFoundException;
@@ -81,7 +80,7 @@ public class TFUploadService extends IntentService {
         super.onCreate();
 
         notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        notification = new NotificationCompat.Builder(this);
+        notification = new NotificationCompat.Builder(getApplicationContext());
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
     }
@@ -104,69 +103,58 @@ public class TFUploadService extends IntentService {
 
             createNotification();
 
-//            doUpload(new UploadTaskInfo(intent.getStringExtra(PARAM_ID),
-//                    (ArrayList) intent.getParcelableArrayListExtra(PARAM_FILES),
-//                    notificationConfig));
+            doUpload(new UploadTaskInfo(intent.getStringExtra(PARAM_ID),
+                    (ArrayList) intent.getParcelableArrayListExtra(PARAM_FILES),
+                    notificationConfig));
         }
     }
 
-    public static void startUpload(UploadTaskInfo request) {
-        request.startUpload();
+    public static void startUploadService(UploadTaskInfo uploadTask) {
+        Intent intent = new Intent(uploadTask.getContext(), TFUploadService.class);
+        intent.setAction(TFUploadService.getActionUpload());
+        intent.putExtra(TFUploadService.PARAM_NOTIFICATION_CONFIG, uploadTask.getNotificationConfig());
+        intent.putExtra(TFUploadService.PARAM_ID, uploadTask.getInfoId());
+        intent.putParcelableArrayListExtra(TFUploadService.PARAM_FILES, uploadTask.getFileObjs());
+        intent.setAction(TFUploadService.getActionUpload());
+        uploadTask.getContext().startService(intent);
     }
 
     public void doUpload(UploadTaskInfo uploadTaskInfo) {
+        //添加任务列表
         recorder.addTask(uploadTaskInfo);
-        OSSManager ossManager = new OSSManager(this.getApplicationContext(), SERVER_ADDRESS, END_POINT, BUCKET_NAME, uploadTaskInfo);
-        try {
-            ossManager.upload(new SaveCallback() {
-                @Override
-                public void onSuccess(String objectKey) {
-                    Log.d(TAG, "[onSuccess] - " + objectKey + " upload success!");
-                    String[] taskIds = recorder.getTaskIDs(objectKey);
-                    for (String taskId : taskIds) {
-                        int totalCount = recorder.getTaskFileCount(taskId);
-                        int unuploadCount = recorder.oneFileCompleted(taskId, objectKey);
-                        Log.d(TAG, "onSuccess  taskid = " + taskId + "      totalCount = " + totalCount + "      unuploadCount = " + unuploadCount);
-                        if (unuploadCount == 0) {
-                            recorder.deleteTask(taskId);
-                            broadcastCompleted(taskId);
-                        } else {
-                            broadcastProgress(taskId, unuploadCount, totalCount);
-                        }
-                    }
-                }
 
-                @Override
-                public void onProgress(String objectKey, int byteCount, int totalSize) {
-                    Log.d(TAG, "[onProgress] - current upload " + objectKey + " bytes: " + byteCount + " in total: " + totalSize);
-                    recorder.oneFileProgress(objectKey, byteCount, totalSize);
-                    String[] taskIds = recorder.getTaskIDs(objectKey);
-                    for (String taskId : taskIds) {
-                        int totalCount = recorder.getTaskFileCount(taskId);
-                        Log.d(TAG, "onProgress  taskid = " + taskId + "      totalCount = " + totalCount);
-                        if (totalCount == 1) {
-                            broadcastProgress(taskId, byteCount, totalSize);
-                        }
-                    }
-                }
+        OSSManager ossManager = new OSSManager(this.getApplicationContext(), SERVER_ADDRESS, END_POINT, BUCKET_NAME);
+        int totalCount = uploadTaskInfo.fileObjs.size();
+        for (int i = 0; i < totalCount; i++) {
+            //更新进度条
+            broadcastProgress(uploadTaskInfo.getInfoId(), i, totalCount);
 
-                @Override
-                public void onFailure(String objectKey, OSSException ossException) {
-                    Log.e(TAG, "[onFailure] - upload " + objectKey + " failed!\n" + ossException.toString());
-                    recorder.oneFileFailure(objectKey);
-                    String[] taskIds = recorder.getTaskIDs(objectKey);
-                    for (String taskId : taskIds) {
-                        broadcastError(taskId, ossException);
-                    }
+            //获取上传文件
+            UploadFileObj uploadFileObj = uploadTaskInfo.fileObjs.get(i);
+
+            //上传操作
+            try {
+                //判断服务器是否已存在该文件
+                if (!ossManager.checkFileExist(uploadFileObj)) {
+                    //如果不存在则上传
+                    ossManager.upload(uploadFileObj);
                 }
-            });
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
+                recorder.oneFileCompleted(uploadTaskInfo.getInfoId(), uploadFileObj.getObjectKey());
+            } catch (OSSException e) {
+                broadcastError(uploadTaskInfo.getInfoId(), e);
+                e.printStackTrace();
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+                broadcastError(uploadTaskInfo.getInfoId(), e);
+            }
         }
 
+        //上传完成，清空任务列表
+        recorder.deleteTask(uploadTaskInfo.getInfoId());
+        broadcastCompleted(uploadTaskInfo.getInfoId());
     }
 
-    void broadcastProgress(final String uploadId, final long uploadedCount, final long total) {
+    void broadcastProgress(final String taskId, final long uploaded, final long total) {
 
         long currentTime = System.currentTimeMillis();
         if (currentTime < lastProgressNotificationTime + PROGRESS_REPORT_INTERVAL) {
@@ -175,35 +163,35 @@ public class TFUploadService extends IntentService {
 
         lastProgressNotificationTime = currentTime;
 
-        updateNotificationProgress((int) uploadedCount, (int) total);
+        updateNotificationProgress((int) uploaded, (int) total);
 
         final Intent intent = new Intent(getActionBroadcast());
-        intent.putExtra(UPLOAD_ID, uploadId);
+        intent.putExtra(UPLOAD_ID, taskId);
         intent.putExtra(STATUS, STATUS_IN_PROGRESS);
 
-        final int percentsProgress = (int) (uploadedCount * 100 / total);
+        final int percentsProgress = (int) (uploaded * 100 / total);
         intent.putExtra(PROGRESS, percentsProgress);
 
-        intent.putExtra(PROGRESS_UPLOADED_BYTES, uploadedCount);
+        intent.putExtra(PROGRESS_UPLOADED_BYTES, uploaded);
         intent.putExtra(PROGRESS_TOTAL_BYTES, total);
         sendBroadcast(intent);
     }
 
-    void broadcastCompleted(final String uploadId) {
+    void broadcastCompleted(final String taskId) {
         updateNotificationCompleted();
         final Intent intent = new Intent(getActionBroadcast());
-        intent.putExtra(UPLOAD_ID, uploadId);
+        intent.putExtra(UPLOAD_ID, taskId);
         intent.putExtra(STATUS, STATUS_COMPLETED);
         sendBroadcast(intent);
         wakeLock.release();
     }
 
-    void broadcastError(final String uploadId, final Exception exception) {
+    void broadcastError(final String taskId, final Exception exception) {
         updateNotificationError();
 
         final Intent intent = new Intent(getActionBroadcast());
         intent.setAction(getActionBroadcast());
-        intent.putExtra(UPLOAD_ID, uploadId);
+        intent.putExtra(UPLOAD_ID, taskId);
         intent.putExtra(STATUS, STATUS_ERROR);
         intent.putExtra(ERROR_EXCEPTION, exception);
         sendBroadcast(intent);
@@ -213,19 +201,29 @@ public class TFUploadService extends IntentService {
 
     private void createNotification() {
         Log.d(TAG, "createNotification() called with: " + "");
-        notification.setContentTitle(notificationConfig.getTitle()).setContentText(notificationConfig.getMessage())
+        notification.setContentTitle(notificationConfig.getTitle())
+                .setContentText(notificationConfig.getMessage())
                 .setContentIntent(notificationConfig.getPendingIntent(this))
-                .setSmallIcon(notificationConfig.getIconResourceID()).setProgress(100, 0, true).setOngoing(true);
+                .setSmallIcon(android.R.drawable.stat_sys_upload)
+                .setWhen(System.currentTimeMillis())  // the time stamp
+                .setTicker("")
+                .setProgress(100, 0, true)
+                .setOngoing(true);
 
         startForeground(UPLOAD_NOTIFICATION_ID, notification.build());
     }
 
-    private void updateNotificationProgress(int uploadedBytes, int totalBytes) {
-        Log.d(TAG, "updateNotificationProgress() called with: " + "uploadedBytes = [" + uploadedBytes + "], totalBytes = [" + totalBytes + "]");
-        notification.setContentTitle(notificationConfig.getTitle()).setContentText(notificationConfig.getMessage())
+    private void updateNotificationProgress(int uploaded, int total) {
+        Log.d(TAG, "updateNotificationProgress() called with: " + "uploadedBytes = [" + uploaded + "], totalBytes = [" + total + "]");
+        notification.setContentTitle(notificationConfig.getTitle())
+                .setContentText(notificationConfig.getMessage())
                 .setContentIntent(notificationConfig.getPendingIntent(this))
-                .setSmallIcon(notificationConfig.getIconResourceID()).setProgress(totalBytes, uploadedBytes, false)
+                .setSmallIcon(notificationConfig.getIconResourceID())
+                .setWhen(System.currentTimeMillis())  // the time stamp
+                .setTicker("")
+                .setProgress(total, uploaded, false)
                 .setOngoing(true);
+
         startForeground(UPLOAD_NOTIFICATION_ID, notification.build());
     }
 

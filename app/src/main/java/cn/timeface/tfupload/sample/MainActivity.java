@@ -1,15 +1,13 @@
 package cn.timeface.tfupload.sample;
 
-import android.content.Intent;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.Toast;
 
 import com.tumblr.remember.Remember;
@@ -34,8 +32,8 @@ public class MainActivity extends AppCompatActivity {
         Remember.init(getApplicationContext(), BuildConfig.APPLICATION_ID);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-//        files.add(new UploadFile("/mnt/sdcard/Download/IMG_0778.JPG", "uploads"));
-//        files.add(new UploadFile("/mnt/sdcard/Download/IMG_1359.JPG", "uploads"));
+        files.add(new UploadFile("/mnt/sdcard/Download/IMG_0778.JPG", "uploads"));
+        files.add(new UploadFile("/mnt/sdcard/Download/IMG_1359.JPG", "uploads"));
         files.add(new UploadFile("/mnt/sdcard/Download/IMG_7116.JPG", "uploads"));
 
         recorder.clear();
@@ -45,23 +43,18 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
 
-                final UploadTaskInfo uploadTaskInfo = new UploadTaskInfo(UUID.randomUUID().toString(), files);
-                uploadTaskInfo.setContext(getApplicationContext());
+                final UploadTaskInfo uploadTaskInfo = new UploadTaskInfo(MainActivity.this, UUID.randomUUID().toString(), files);
 
                 uploadTaskInfo.setNotificationConfig(R.mipmap.ic_launcher, getString(R.string.app_name),
                         getString(R.string.uploading), getString(R.string.upload_success),
                         getString(R.string.upload_error), false);
 
-//                request.setNotificationClickIntent(new Intent(this, MainActivity.class));
-
-
                 try {
                     TFUploadService.setRecorder(recorder);
-                    TFUploadService.startUpload(uploadTaskInfo);
+                    TFUploadService.startUploadService(uploadTaskInfo);
                 } catch (Exception exc) {
                     Toast.makeText(MainActivity.this, "Malformed upload request. " + exc.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
                 }
-
 
             }
         });

@@ -22,32 +22,10 @@ public class UploadTaskInfo {
         this.fileObjs = fileObjs;
         this.notificationConfig = uploadNotificationConfig;
     }
-    public UploadTaskInfo(String infoId, ArrayList<UploadFileObj> fileObjs) {
+    public UploadTaskInfo(Context context,String infoId, ArrayList<UploadFileObj> fileObjs) {
         this.infoId = infoId;
         this.fileObjs = fileObjs;
-    }
-
-
-    /**
-     * Start the background file upload service.
-     */
-    public void startUpload() {
-        final Intent intent = new Intent(this.getContext(), TFUploadService.class);
-        this.initializeIntent(intent);
-        intent.setAction(TFUploadService.getActionUpload());
-        getContext().startService(intent);
-    }
-
-    /**
-     * Write any upload request data to the intent used to start the upload service.
-     *
-     * @param intent the intent used to start the upload service
-     */
-    protected void initializeIntent(Intent intent) {
-        intent.setAction(TFUploadService.getActionUpload());
-        intent.putExtra(TFUploadService.PARAM_NOTIFICATION_CONFIG, getNotificationConfig());
-        intent.putExtra(TFUploadService.PARAM_ID, getInfoId());
-        intent.putParcelableArrayListExtra(TFUploadService.PARAM_FILES, getFileObjs());
+        this.context = context;
     }
 
     public String getInfoId() {
