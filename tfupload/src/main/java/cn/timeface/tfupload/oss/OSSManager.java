@@ -56,7 +56,10 @@ public class OSSManager {
         bucket = ossService.getOssBucket(this.bucketName);
     }
 
-
+    /**
+     * 初始化OSSService
+     * @param context
+     */
     private void initOssService(Context context) {
         ossService = OSSServiceProvider.getService();
 
@@ -95,28 +98,51 @@ public class OSSManager {
         ossService.setClientConfiguration(conf);
     }
 
-    public void delete(String key, DeleteCallback deleteCallback) {
-        OSSFile ossFile = ossService.getOssFile(bucket, key);
+    /**
+     * 异步删除指定key的文件
+     * @param objectKey 阿里云上的objectKey
+     * @param deleteCallback 回调参数
+     */
+    public void delete(String objectKey, DeleteCallback deleteCallback) {
+        OSSFile ossFile = ossService.getOssFile(bucket, objectKey);
         ossFile.deleteInBackground(deleteCallback);
     }
 
-    public void upload(UploadFileObj uploadFileObj, SaveCallback saveCallback) throws FileNotFoundException {
-        String key = uploadFileObj.getObjectKey();
-        OSSFile ossFile = ossService.getOssFile(bucket, key);
-        ossFile.setUploadFilePath(uploadFileObj.getFinalUploadFile().getAbsolutePath(), "application/octet-stream");
+    /**
+     * 异步上传文件
+     * @param objectKey 阿里云objectKey
+     * @param uploadFilePath 上传文件的路径
+     * @param saveCallback 上传的回调事件
+     * @throws FileNotFoundException
+     */
+    public void upload(String objectKey, String uploadFilePath, SaveCallback saveCallback) throws FileNotFoundException {
+        OSSFile ossFile = ossService.getOssFile(bucket, objectKey);
+        ossFile.setUploadFilePath(uploadFilePath, "application/octet-stream");
         ossFile.ResumableUploadInBackground(saveCallback);
     }
 
-    public void upload(UploadFileObj uploadFileObj) throws FileNotFoundException, OSSException {
-        String key = uploadFileObj.getObjectKey();
-        OSSFile ossFile = ossService.getOssFile(bucket, key);
-        ossFile.setUploadFilePath(uploadFileObj.getFinalUploadFile().getAbsolutePath(), "application/octet-stream");
+    /**
+     * 同步上传文件
+     * @param objectKey  阿里云objectKey
+     * @param uploadFilePath 上传文件的路径
+     * @throws FileNotFoundException
+     * @throws OSSException
+     */
+    public void upload(String objectKey, String uploadFilePath) throws FileNotFoundException, OSSException {
+        OSSFile ossFile = ossService.getOssFile(bucket, objectKey);
+        ossFile.setUploadFilePath(uploadFilePath, "application/octet-stream");
         ossFile.upload();
     }
 
-    public boolean checkFileExist(UploadFileObj file) {
+    /**
+     * 同步检测该文件是否在阿里云上存在
+     *
+     * @param objectKey object key
+     * @return true 已存在
+     */
+    public boolean checkFileExist(String objectKey) {
         OkHttpClient httpClient = new OkHttpClient();
-        String url = String.format("http://%s.%s/%s", this.bucketName, this.endPoint, file.getObjectKey());
+        String url = String.format("http://%s.%s/%s", this.bucketName, this.endPoint, objectKey);
         Request request = new Request.Builder().head()
                 .url(url)
                 .build();
@@ -129,13 +155,27 @@ public class OSSManager {
         return response != null && (response.code() == 200);
     }
 
-    public void download(String key, String downloadFilePath) throws OSSException {
-        OSSFile ossFile = ossService.getOssFile(bucket, key);
+    /**
+     * 同步下载
+     *
+     * @param objectKey 阿里云objectKey
+     * @param downloadFilePath 文件下载路径
+     * @throws OSSException
+     */
+    public void download(String objectKey, String downloadFilePath) throws OSSException {
+        OSSFile ossFile = ossService.getOssFile(bucket, objectKey);
         ossFile.downloadTo(downloadFilePath);
     }
 
-    public void download(String key, String downloadFilePath, GetFileCallback getFileCallback) {
-        OSSFile ossFile = ossService.getOssFile(bucket, key);
+    /**
+     * 异步下载
+     *
+     * @param objectKey 阿里云objectKey
+     * @param downloadFilePath 文件下载路径
+     * @param getFileCallback 回调事件
+     */
+    public void download(String objectKey, String downloadFilePath, GetFileCallback getFileCallback) {
+        OSSFile ossFile = ossService.getOssFile(bucket, objectKey);
         ossFile.downloadToInBackground(downloadFilePath, getFileCallback);
     }
 

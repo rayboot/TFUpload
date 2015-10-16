@@ -135,9 +135,9 @@ public class TFUploadService extends IntentService {
             //上传操作
             try {
                 //判断服务器是否已存在该文件
-                if (!ossManager.checkFileExist(uploadFileObj)) {
+                if (!ossManager.checkFileExist(uploadFileObj.getObjectKey())) {
                     //如果不存在则上传
-                    ossManager.upload(uploadFileObj);
+                    ossManager.upload(uploadFileObj.getObjectKey(), uploadFileObj.getFinalUploadFile().getAbsolutePath());
                 }
                 recorder.oneFileCompleted(uploadTaskInfo.getInfoId(), uploadFileObj.getObjectKey());
             } catch (OSSException e) {
