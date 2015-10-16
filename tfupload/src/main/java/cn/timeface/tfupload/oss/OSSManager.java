@@ -7,6 +7,7 @@ import android.widget.Toast;
 import com.alibaba.sdk.android.oss.OSSService;
 import com.alibaba.sdk.android.oss.OSSServiceProvider;
 import com.alibaba.sdk.android.oss.callback.DeleteCallback;
+import com.alibaba.sdk.android.oss.callback.GetFileCallback;
 import com.alibaba.sdk.android.oss.callback.SaveCallback;
 import com.alibaba.sdk.android.oss.model.AccessControlList;
 import com.alibaba.sdk.android.oss.model.AuthenticationType;
@@ -126,6 +127,16 @@ public class OSSManager {
             e.printStackTrace();
         }
         return response != null && (response.code() == 200);
+    }
+
+    public void download(String key, String downloadFilePath) throws OSSException {
+        OSSFile ossFile = ossService.getOssFile(bucket, key);
+        ossFile.downloadTo(downloadFilePath);
+    }
+
+    public void download(String key, String downloadFilePath, GetFileCallback getFileCallback) {
+        OSSFile ossFile = ossService.getOssFile(bucket, key);
+        ossFile.downloadToInBackground(downloadFilePath, getFileCallback);
     }
 
 }
